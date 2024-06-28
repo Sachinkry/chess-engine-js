@@ -22,3 +22,7 @@
 .highlight-check {
     box-shadow: inset 0 0 6px 6px rgba(138, 24, 2, 0.7);
 }
+
+.highlight-move {
+    box-shadow: inset 0 0 6px 6px rgba(86, 170, 193, 0.7);
+}

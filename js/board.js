@@ -13,12 +13,13 @@ var GameBoard = {
     pList: new Array(14 * 10),  // array containg pieces for each square
     posKey: 0,             // unique position key for current board state
     moves: [],             // array storing the legal moves for the current position
+    castleMove: [],
     moveList: new Array(MAXDEPTH * MAXPOSITIONMOVES),
     moveScores: new Array(MAXDEPTH * MAXPOSITIONMOVES),
     moveListStart: new Array(MAXDEPTH),
     isKingInCheck: false,
     isGameOver: false,
-    castleMove: []
+    kingInCheckCount: 0,
 };
 // moveList: Array storing all moves in the current search.
 // moveScores: Array storing the scores for each move.
@@ -101,19 +102,27 @@ const ResetBoard = () => {
 }
 
 
-const updateGameBoard = (newPosFen) => {
+const updateGameBoard = async (source, target, piece, newPosFen) => {
 
-    console.log("updateGameBoard:", GameBoard.fen)
+    console.log("updateGameBoard:", GameBoard.fen);
     
     const turn = SideChar[GameBoard.side];
     const fen = `${newPosFen} ${turn} KQkq - 0 1`
     const fenParts = fen.split(' ');
     const position = fenParts[0];
     const fenSide = fenParts[1];
-    const castling = fenParts[2];
-    const enPassant = fenParts[3];
+    // const castling = fenParts[2];
+    let enPassant = fenParts[3];
     const halfMove = parseInt(fenParts[4], 10);
     const fullMove = parseInt(fenParts[5], 10);
+    
+    // Update en passant square
+    isEnpassantMove(source, target, piece);
+    if(GameBoard.enPas === 99){
+        enPassant = '-'
+    } else {
+        enPassant = GameBoard.enPas;
+    }
     
     const positionRanks = position.split('/');
     if (positionRanks.length !== 8) {
@@ -166,21 +175,16 @@ const updateGameBoard = (newPosFen) => {
     // update turn
     GameBoard.side = (fenSide === 'w' ? COLORS.BLACK: COLORS.WHITE);
     
-    // Update en passant square
-    if (enPassant !== '-') {
-        const file = enPassant.charCodeAt(0) - 'a'.charCodeAt(0);
-        const rank = enPassant.charCodeAt(1) - '1'.charCodeAt(0);
-        GameBoard.enPas = FR2SQ(file, rank);
-    } else {
-        GameBoard.enPas = 0;
-    }
 
     // Update castling permissions
-    GameBoard.castlePerm = 0;
-    if (castling.includes('K')) GameBoard.castlePerm |= CASTLEBIT.WKCA;
-    if (castling.includes('Q')) GameBoard.castlePerm |= CASTLEBIT.WQCA;
-    if (castling.includes('k')) GameBoard.castlePerm |= CASTLEBIT.BKCA;
-    if (castling.includes('q')) GameBoard.castlePerm |= CASTLEBIT.BQCA;
+    UpdateCastlePerm();
+    // update castling in fen string
+    let updatedCastling = '';
+    if (GameBoard.castlePerm & CASTLEBIT.WKCA) updatedCastling += 'K';
+    if (GameBoard.castlePerm & CASTLEBIT.WQCA) updatedCastling += 'Q';
+    if (GameBoard.castlePerm & CASTLEBIT.BKCA) updatedCastling += 'k';
+    if (GameBoard.castlePerm & CASTLEBIT.BQCA) updatedCastling += 'q';
+    if (updatedCastling === '') updatedCastling = '-';
 
     // Update half-move counter
     GameBoard.fiftyMove = halfMove;
@@ -190,7 +194,7 @@ const updateGameBoard = (newPosFen) => {
 
     // Update the FEN string in GameBoard
     const sideChar = GameBoard.side === COLORS.WHITE ? 'w' : 'b';
-    GameBoard.fen = `${position} ${sideChar} ${castling} ${enPassant} ${halfMove} ${fullMove}`;
+    GameBoard.fen = `${position} ${sideChar} ${updatedCastling} ${enPassant} ${halfMove} ${fullMove}`;
 
     console.log("Updated GameBoard:", GameBoard);
 }

@@ -65,15 +65,17 @@ const updateGameStatusUI = (source, target) => {
     // document.getElementById('fiftyMoveCounter').innerText = GameBoard.fiftyMove;
     // document.getElementById('enPassantSquare').innerText = GameBoard.enPas !== 0 ? SQ120TOFILERANK(GameBoard.enPas) : 'None';
     // document.getElementById('castlingPermission').innerText = castlingPermissionToString(GameBoard.castlePerm);
-  
-    const kingInCheckPos = isKingInCheck();
-    // if (kingInCheckPos !== -1) {
-    //     let square = SQ120TOFILERANK(kingInCheckPos);
-    //     document.getElementById('kingInCheck').innerText = square;
-    //     $board.find('.square-' + square).addClass('highlight-attack');
-    // } else {
-    //     document.getElementById('kingInCheck').innerText = 'No';
-    // }
+
+    if (GameBoard.isGameOver) {
+        const turn = SideChar[GameBoard.side];
+        const winner = (turn === 'w') ? 'White' : 'Black';
+    
+        document.getElementById('winningStatus').innerText = `Game Over: ${winner} won`;
+        
+        // Disable board
+        $('#myBoard').css('pointer-events', 'none');
+    
+    }
     console.log("board chess", board, source, target, `${source}-${target}`)
     board.move(`${source}-${target}`);
   
@@ -195,11 +197,13 @@ const ParseFen= (fen) => {
     GameBoard.posKey = GeneratePosKey(); // Generate the position key after parsing the FEN
 }
 
-// TODO find some use for this function
-const boardToFen = () => {
-    let fen = "";
+//? Used mainly to update fen position after castle moves
+//! not in use
+const updateFenPosition = () => {
+    let newFenPosition = "";
     let emptyCount = 0;
 
+    // Generate the new position part of the FEN
     for (let rank = RANKS.RANK_8; rank >= RANKS.RANK_1; rank--) {
         for (let file = FILES.FILE_A; file <= FILES.FILE_H; file++) {
             const sq = FR2SQ(file, rank);
@@ -208,39 +212,68 @@ const boardToFen = () => {
                 emptyCount++;
             } else {
                 if (emptyCount > 0) {
-                    fen += emptyCount.toString();
+                    newFenPosition += emptyCount.toString();
                     emptyCount = 0;
                 }
                 const pieceChar = PceChar[piece];
-                fen += pieceChar;
+                newFenPosition += pieceChar;
             }
         }
         if (emptyCount > 0) {
-            fen += emptyCount.toString();
+            newFenPosition += emptyCount.toString();
             emptyCount = 0;
         }
         if (rank > RANKS.RANK_1) {
-            fen += '/';
+            newFenPosition += '/';
         }
     }
 
-    fen += ' ';
-    fen += (GameBoard.side === COLORS.WHITE) ? 'w' : 'b';
+    // Extract the current FEN string from GameBoard
+    let currentFen = GameBoard.fen;
 
-    fen += ' ';
-    let castleString = '';
-    if (GameBoard.castlePerm & CASTLEBIT.WKCA) castleString += 'K';
-    if (GameBoard.castlePerm & CASTLEBIT.WQCA) castleString += 'Q';
-    if (GameBoard.castlePerm & CASTLEBIT.BKCA) castleString += 'k';
-    if (GameBoard.castlePerm & CASTLEBIT.BQCA) castleString += 'q';
-    fen += (castleString === '') ? '-' : castleString;
+    // Split the current FEN string into its components
+    let fenParts = currentFen.split(' ');
 
-    fen += ' ';
-    fen += (GameBoard.enPas === SQUARES.NO_SQ) ? '-' : FileChar[FILES.FILE_A + SQ120TOFILE(GameBoard.enPas)] + RankChar[RANKS.RANK_1 + SQ120TORANK(GameBoard.enPas)];
+    // Update only the position part of the FEN string
+    fenParts[0] = newFenPosition;
 
-    // Optional: Add half-move clock and full-move number if tracked in GameBoard
-    // fen += ' ' + GameBoard.halfMoveClock + ' ' + GameBoard.fullMoveNumber;
+    // Reassemble the FEN string
+    let updatedFen = fenParts.join(' ');
 
-    return fen;
+    // Update the GameBoard.fen with the new FEN string
+    GameBoard.fen = updatedFen;
+
+    console.log("fen update after castling")
+
+    return updatedFen;
 }
 
+//! not in use
+function isThisACastleMove(source, target, piece) {
+    if (piece !== 'wK' && piece !== 'bK') {
+        return false;
+    }
+  
+    // Handle white king-side castling
+    if (piece === 'wK' && source === 'e1' && target === 'g1') {
+        return true;
+    }
+    
+    // Handle white queen-side castling
+    if (piece === 'wK' && source === 'e1' && target === 'c1') {
+        return true;
+    }
+    
+    // Handle black king-side castling
+    if (piece === 'bK' && source === 'e8' && target === 'g8') {
+        return true;
+    }
+    
+    // Handle black queen-side castling
+    if (piece === 'bK' && source === 'e8' && target === 'c8') {
+        return true;
+    }
+  
+    return false;
+}
+  
