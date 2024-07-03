@@ -126,7 +126,7 @@ const updateGameBoard = async (source, target, piece, newPosFen) => {
     
     const positionRanks = position.split('/');
     if (positionRanks.length !== 8) {
-        console.error("FEN error: Invalid FEN position format; lol your code sucks man!");
+        console.error("FEN error: Invalid FEN position format; lol your code sucks man!", position);
         return;
     }
 

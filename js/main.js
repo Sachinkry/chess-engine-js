@@ -15,13 +15,15 @@ $(document).ready(function() {
   board = Chessboard('myBoard', config)
 
   $('#newGameBtn').on('click', ()=> {
-    board.start();
-    initBoard();
-    $('#myBoard').css('pointer-events', 'auto');
+    location.reload();
+    // board.start();
+    // initBoard();
+    // $('#myBoard').css('pointer-events', 'auto');
   })
 
   // Initialize the game board
   initBoard();
+  
   console.log("Main Init Called");
 })
 
@@ -30,9 +32,9 @@ function initBoard() {
   initBoardSquares();
   ParseFen(START_FEN);
   PrintBoard();
-  updateGameStatusUI();
   checkGameOver();
   handleKingCheck()
+  updateGameStatusUI();
 }
 
 
@@ -55,6 +57,7 @@ function onDragStart (source, piece, position, orientation) {
       (turn === 'b' && piece.search(/^b/) === -1)) {
     return false
   }
+  
 
   if((source === 'e1' || source === 'e8') && (piece[1] === 'K')) {
     console.log("SEND THIS MF TO CHECK FOR CASTLING")
@@ -78,6 +81,7 @@ function highlightLegalMoves(piece) {
   lgMoves.forEach(sqIndex => {
       const square = SQ120TOFILERANK(sqIndex);
       const squareAttacked = isSquareAttacked(sqIndex, piece);
+      $board.find('.square-55d63').removeClass('highlight-move');
       $board.find('.square-' + square).addClass('highlight-legal');
       $board.find('.square-' + square)
           .addClass(squareAttacked ? 'highlight-attack' : 'highlight-legal');
@@ -109,10 +113,15 @@ function onDrop (source, target, piece, newPos, oldPos, orientation) {
     PrintBoard();
     handleKingCheck();
     checkGameOver()
+    // checkIfGameOver()
     updateGameStatusUI(source, target);
     highlightMove(source,target);
     // make random move 
-    setTimeout(gameLoop, 500);
+    if(GameBoard.kingInCheckCount !== 2){
+      // setTimeout(gameLoop, 500);
+      makeEvaluatedMove();
+      // setTimeout(makeEvaluatedMove, 8000);
+    }
   } else {
     resetHighlights();
     return 'snapback';
@@ -138,6 +147,7 @@ function handleKingCheck() {
   } else {
     $('.highlight-check').removeClass('highlight-check');
   }
+  // checkGameOver();
 }
 
 function checkGameOver() {
@@ -159,6 +169,13 @@ function checkGameOver() {
   if (GameBoard.kingInCheckCount >= 2) {
       
       GameBoard.isGameOver = true;
+      const turn = SideChar[GameBoard.side];
+      const winner = (turn === 'w') ? 'White' : 'Black';
+  
+      document.getElementById('winningStatus').innerText = `Game Over: ${winner} won`;
+      
+      // Disable board
+      $('#myBoard').css('pointer-events', 'none');
      
   }
 }

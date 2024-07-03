@@ -45,6 +45,12 @@ const RAND_32 = () => {
 
 const FR2SQ = (f,r) => (21 + (f) ) + ((r) * 10 );
 
+const FR2SQIndex = (pos) => {
+    const file = pos.charCodeAt(0) - 'a'.charCodeAt();
+    const rank = parseInt(pos[1]) - 1;
+    return (21 + file) + (rank * 10);
+}
+
 const SQ64 = sq120 => Sq120ToSq64[sq120];
 const SQ120 = sq64 => Sq64ToSq120[sq64];
 
@@ -59,6 +65,83 @@ const SQ120TOFILERANK = sq120 => {
     return fileChar + rankChar;
 }
 
+const fenToObjs = (fen) => {
+    const boardObj = {};
+    const rows = fen.split(' ')[0].split('/'); // Get the board configuration part and split it by ranks
+
+    // Files and ranks for referencing board squares
+    const files = 'abcdefgh';
+    const ranksReverse = '87654321';
+
+    rows.forEach((row, rankIdx) => {
+        let fileIdx = 0;
+
+        for (let char of row) {
+            if (char >= '1' && char <= '8') {
+                // Empty squares, skip the number of squares indicated by the digit
+                fileIdx += parseInt(char);
+            } else {
+                // Piece found, map it to the board object
+                const square = files[fileIdx] + ranksReverse[rankIdx];
+                // Check if the piece is white or black and format accordingly
+                const piece = char >= 'a' && char <= 'z' ? 'b' + char.toUpperCase() : 'w' + char;
+                boardObj[square] = piece;
+                fileIdx++;
+            }
+        }
+    });
+
+    return boardObj;
+};
+
+const posObjToFen = (boardObj) => {
+    const files = 'abcdefgh';
+    const ranks = '87654321';
+    const fenArray = [];
+
+    if (!boardObj || typeof boardObj !== 'object') {
+        throw new Error('Invalid board object');
+    }
+
+    for (let rank of ranks) {
+        let fenRank = '';
+        let emptyCount = 0;
+
+        for (let file of files) {
+            const square = file + rank;
+            const piece = boardObj[square];
+
+            if (piece && typeof piece === 'string' && piece.length === 2) {
+                if (emptyCount > 0) {
+                    fenRank += emptyCount;
+                    emptyCount = 0;
+                }
+                const [color, type] = piece.split('');
+                fenRank += color === 'w' ? type.toUpperCase() : type.toLowerCase();
+            } else {
+                // Square is empty (either no piece or invalid piece)
+                emptyCount++;
+            }
+        }
+
+        if (emptyCount > 0) {
+            fenRank += emptyCount;
+        }
+
+        fenArray.push(fenRank);
+        emptyCount = 0;  // Reset emptyCount at the end of each rank
+    }
+
+    const fenString = fenArray.join('/');
+
+    // Validate the resulting FEN string
+    if (!/^([pnbrqkPNBRQK1-8]{1,8}\/){7}[pnbrqkPNBRQK1-8]{1,8}$/.test(fenString)) {
+        throw new Error('Generated invalid FEN string');
+    }
+
+    return fenString;
+};
+
 const updateGameStatusUI = (source, target) => {
     document.getElementById('sideToMove').innerText = GameBoard.side === 0 ? "White's move": "Black's move";
     // document.getElementById('currentFEN').innerText = GameBoard.fen;
@@ -66,16 +149,17 @@ const updateGameStatusUI = (source, target) => {
     // document.getElementById('enPassantSquare').innerText = GameBoard.enPas !== 0 ? SQ120TOFILERANK(GameBoard.enPas) : 'None';
     // document.getElementById('castlingPermission').innerText = castlingPermissionToString(GameBoard.castlePerm);
 
-    if (GameBoard.isGameOver) {
-        const turn = SideChar[GameBoard.side];
-        const winner = (turn === 'w') ? 'White' : 'Black';
+    // if (GameBoard.isGameOver) {
+    //     const turn = SideChar[GameBoard.side];
+    //     const winner = (turn === 'w') ? 'Black' : 'White';
     
-        document.getElementById('winningStatus').innerText = `Game Over: ${winner} won`;
+    //     document.getElementById('winningStatus').innerText = `Game Over: ${winner} won`;
         
-        // Disable board
-        $('#myBoard').css('pointer-events', 'none');
+    //     // Disable board
+    //     $('#myBoard').css('pointer-events', 'none');
     
-    }
+    // // $board.find('.square-' + square).css('pointer-events', none)
+    // }
     console.log("board chess", board, source, target, `${source}-${target}`)
     board.move(`${source}-${target}`);
   
@@ -195,6 +279,206 @@ const ParseFen= (fen) => {
     }
 
     GameBoard.posKey = GeneratePosKey(); // Generate the position key after parsing the FEN
+}
+
+const parseFenToArray = (fen) => {
+    const boardArray = new Array(BRD_SQ_NUM).fill(SQUARES.OFFBOARD);
+
+    // Fill the main board area with EMPTY
+    for (let i = 21; i <= 98; i++) {
+        if (i % 10 !== 0 && i % 10 !== 9) {
+            boardArray[i] = PIECES.EMPTY;
+        }
+    }
+
+    const ranks = fen.split('/').reverse();
+    let sq120Index = 21; // Start from A1 in the 12x10 board
+
+    ranks.forEach(rank => {
+        for (let char of rank) {
+            if (char >= '1' && char <= '8') {
+                sq120Index += parseInt(char); // Skip empty squares
+            } else {
+                const pieceIndex = PceChar.indexOf(char);
+                if (pieceIndex !== -1) {
+                    boardArray[sq120Index] = pieceIndex;
+                }
+                sq120Index++;
+            }
+        }
+        sq120Index += 2; // Move to the next rank, accounting for the offboard squares
+    });
+
+    return boardArray;
+}
+
+function getLegalMovesCopy(boardArray,source, piece) {
+    // GameBoard.moves = [];
+    let legalMoves = []
+    let p = piece == 'bP' ? piece[1].toLowerCase() : piece[1];
+    let directions = pieceDirections[p];
+    let f = FileChar.indexOf(source[0]);
+    let r = RankChar.indexOf(source[1]);
+    let square = FR2SQ(f,r)
+    // console.log(source, piece, square, directions, GameBoard.pieces[square])  // g2 wP {a1:'wR', ... h8:'bR'}
+
+
+    directions.forEach(direction => {
+        let targetSquare = square + direction;
+        // console.log(p, GameBoard.pieces[targetSquare], targetSquare)
+        
+        if (p === 'P' || p === 'p') {
+            // Single square forward move
+            if (direction === (p === 'P' ? 10 : -10) && boardArray[targetSquare] === PIECES.EMPTY ) {
+                legalMoves.push(targetSquare);
+                
+                // Double square forward move from starting position
+                if ((p === 'P' && r === 1) || (p === 'p' && r === 6)) {
+                    let doubleMoveSquare = targetSquare + direction;
+                    if (boardArray[doubleMoveSquare] === PIECES.EMPTY) {
+                        legalMoves.push(doubleMoveSquare);
+                    }
+                }
+            } 
+            // Handle captures
+            else if (Math.abs(direction) === 9 || Math.abs(direction) === 11) {
+                // console.log("isNotEmpty", boardArray[targetSquare] !== PIECES.EMPTY)
+                // console.log("NotOffboard", boardArray[targetSquare] !== SQUARES.OFFBOARD)
+                // console.log("hi", ((p === 'P' && boardArray[targetSquare] >= PIECES.bP) ||
+                // (p === 'p' && boardArray[targetSquare] <= PIECES.wK)));
+                if (boardArray[targetSquare] !== PIECES.EMPTY &&
+                    boardArray[targetSquare] !== SQUARES.OFFBOARD &&
+                    ((p === 'P' && boardArray[targetSquare] >= PIECES.bP) ||
+                    (p === 'p' && boardArray[targetSquare] <= PIECES.wK))) {
+                    legalMoves.push(targetSquare);
+                } else if (targetSquare === GameBoard.enPas) {
+                    legalMoves.push(targetSquare)
+                }
+            }
+        } else {
+            // For non-pawn pieces
+            while (boardArray[targetSquare] !== SQUARES.OFFBOARD) {
+                if (boardArray[targetSquare] === PIECES.EMPTY) {
+                    if(piece[1] === 'K' && IsSqAttacked(targetSquare)){
+                        // legalMoves.push(targetSquare);
+                        // console.log("targetSquare for king in attack oh my lord help me........")
+                    } else {
+                        legalMoves.push(targetSquare);
+                    }
+                } else if (boardArray[targetSquare] !== PIECES.EMPTY) {
+                    if((piece[0] === 'w' && boardArray[targetSquare] >= PIECES.bP) ||
+                    (piece[0] === 'b' && boardArray[targetSquare] <= PIECES.wK)) {
+                        legalMoves.push(targetSquare);
+                    }
+                    break;
+                } else {
+                    break;
+                }
+
+                // Continue in the same direction for sliding pieces
+                if (['N', 'K'].includes(p)) {
+                    break;
+                }
+                targetSquare += direction;
+            }
+        }
+
+        
+        
+    })
+    return legalMoves;
+
+}
+
+function isKingInCheckCopy(boardArray) {
+    const sides = [COLORS.WHITE, COLORS.BLACK];
+    const pieceKing = [PIECES.wK, PIECES.bK];
+    const piecePawn = [PIECES.bP, PIECES.wP];
+    const pieceKnight = [PIECES.wN, PIECES.bN];
+    const pieceBishop = [PIECES.wB, PIECES.bB];
+    const pieceRook = [PIECES.wR, PIECES.bR];
+    const pieceQueen = [PIECES.wQ, PIECES.bQ];
+
+    const knightDirections = [-8, -19, -21, -12, 8, 19, 21, 12];
+    const bishopDirections = [-9, -11, 11, 9];
+    const rookDirections = [-1, -10, 1, 10];
+    const kingDirections = [-1, -10, 1, 10, -9, -11, 11, 9];
+
+    for (let side = 0; side < sides.length; side++) {
+        const opponent = (side === 0) ? COLORS.BLACK : COLORS.WHITE;
+        let kingPos = -1;
+
+        // Locate the king
+        for (let sq = 0; sq < BRD_SQ_NUM; sq++) {
+            if (boardArray[sq] === pieceKing[side]) {
+                kingPos = sq;
+                break;
+            }
+        }
+
+        if (kingPos === -1) {
+            // King not found, treat as game over
+            console.log("KING NOT FOUND ON THE BOARD............")
+            return side === COLORS.WHITE ? Number.NEGATIVE_INFINITY : Number.POSITIVE_INFINITY;
+        }
+
+        // Check for pawn attacks
+        if (side === 0) {
+            if (boardArray[kingPos + 11] === piecePawn[side] || boardArray[kingPos + 9] === piecePawn[side]) {
+                return kingPos;
+            }
+        } else {
+            if (boardArray[kingPos - 11] === piecePawn[side] || boardArray[kingPos - 9] === piecePawn[side]) {
+                return kingPos;
+            }
+        }
+
+        // Check for knight attacks
+        for (let dir of knightDirections) {
+            if (boardArray[kingPos + dir] === pieceKnight[opponent]) {
+                return kingPos;
+            }
+        }
+
+        // Check for bishop/queen diagonal attacks
+        for (let dir of bishopDirections) {
+            let t_square = kingPos + dir;
+            while (boardArray[t_square] !== SQUARES.OFFBOARD) {
+                const piece = boardArray[t_square];
+                if (piece !== PIECES.EMPTY) {
+                    if ((piece === pieceBishop[opponent] || piece === pieceQueen[opponent])) {
+                        return kingPos;
+                    }
+                    break;
+                }
+                t_square += dir;
+            }
+        }
+
+        // Check for rook/queen straight attacks
+        for (let dir of rookDirections) {
+            let t_square = kingPos + dir;
+            while (boardArray[t_square] !== SQUARES.OFFBOARD) {
+                const piece = boardArray[t_square];
+                if (piece !== PIECES.EMPTY) {
+                    if ((piece === pieceRook[opponent] || piece === pieceQueen[opponent])) {
+                        return kingPos;
+                    }
+                    break;
+                }
+                t_square += dir;
+            }
+        }
+
+        // Check for king attacks
+        for (let dir of kingDirections) {
+            if (boardArray[kingPos + dir] === pieceKing[opponent]) {
+                return kingPos;
+            }
+        }
+    }
+
+    return -1; // Neither king is in check
 }
 
 //? Used mainly to update fen position after castle moves

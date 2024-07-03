@@ -16,7 +16,8 @@ function getLegalMoves(source, piece) {
     let f = FileChar.indexOf(source[0]);
     let r = RankChar.indexOf(source[1]);
     let square = FR2SQ(f,r)
-    console.log(source, piece, square, directions, GameBoard.pieces[square])  // g2 wP {a1:'wR', ... h8:'bR'}
+    // console.log(source, piece, square, directions, GameBoard.pieces[square])  // g2 wP {a1:'wR', ... h8:'bR'}
+
 
     directions.forEach(direction => {
         let targetSquare = square + direction;
@@ -77,23 +78,65 @@ function getLegalMoves(source, piece) {
                 targetSquare += direction;
             }
         }
-
-        // Additional check for king moves
-        // if (p === 'K' || p === 'k') {
-        //     if (IsSqAttacked(targetSquare)) {
-        //         GameBoard.moves.(targetSquare);
-        //     }
-        // }
         
     })
-
-    // genertePossibleCastleMoves();
-    // console.log(GameBoard.moves)
-
     return GameBoard.moves;
 
 }
 
+function getAllLegalMovesObjs(posFen, isMaximizingPlayer) {
+    let legalMovesObjList = [];
+    let moves = [];
+    const currentFen = posFen.split(' ')[0];
+    const boardArray = parseFenToArray(currentFen);
+    const currentPos = fenToObjs(currentFen);
+    const side = isMaximizingPlayer ? COLORS.WHITE : COLORS.BLACK;  // 0 or 1
+    console.log("Current Position:", currentPos, currentFen);
+
+    // Function to get the file and rank from square index
+    const getFileRank = (sq) => SQ120TOFILERANK(sq);
+
+    // Function to process each move
+    const processMove = (from, to, piece, currentPos) => {
+        const source = getFileRank(from);
+        const target = getFileRank(to);
+
+        // Create a deep copy of the current position
+        const newPos = JSON.parse(JSON.stringify(currentPos));
+
+        // Perform the move on the copied position
+        delete newPos[source];
+        newPos[target] = piece;
+
+        // Convert the new position to FEN and add to the list
+        const newPosFen = Chessboard.objToFen(newPos);
+        return { position: newPosFen, move:{source, target, piece} };
+    };
+
+    // Get legal moves for each piece
+    for (let sq = 0; sq < BRD_SQ_NUM; sq++) {
+        if (boardArray[sq] !== SQUARES.OFFBOARD  && PieceCol[boardArray[sq]] === side) {
+            const piece = PIECES_[boardArray[sq]];
+            const legalMovesSq = getLegalMovesCopy(boardArray, getFileRank(sq), piece);
+            // console.log(`Legal moves for ${piece} at ${getFileRank(sq)}:`, legalMovesSq);
+
+            legalMovesSq.forEach(move => {
+                moves.push({ from: sq, to: move, piece });
+            });
+        }
+    }
+
+    // Process each legal move
+    moves.forEach(legalMove => {
+        const { from, to, piece } = legalMove;
+        const legalMoveObj = processMove(from, to, piece, currentPos);
+        legalMovesObjList.push(legalMoveObj);
+    });
+
+    console.log("Legal Moves FEN:", legalMovesObjList);
+    return legalMovesObjList;
+}
+// 
 // returns true/false
 function isLegalMove(target) {
     let legalMoves = GameBoard.moves;
@@ -308,6 +351,108 @@ function isKingInCheck() {
 
 
 
+
+//* ----------- Evaluated Move Generator for black --------------------
+
+const makeEvaluatedMove = () => {
+    console.log("********************************** Black's turn *************************************")
+    let source, target, piece;
+    let result = minimax(GameBoard.fen, 3, false);
+    console.log("Best move:", result.move, "Score:", result.score);
+    // when eval is 0, the moves are dull, add some randomness(later: we may give opening book to bot)
+
+    source = result.move.source;
+    target = result.move.target;
+    piece = result.move.piece;
+    if(result.move === null){
+
+    }
+    
+    if(result.score === 0){
+        // get legal Moves for given posFen
+        // makeRandomMove();
+        // select one of them randomly
+        // const moves = getAllLegalMoves();
+        // if (moves.length === 0) {
+        //     console.log("No legal moves available");
+        //     return;
+        // }
+        // const randomMove = moves[Math.floor(Math.random() * moves.length)];
+        // source = SQ120TOFILERANK(randomMove.from);
+        // target = SQ120TOFILERANK(randomMove.to);
+        // piece = PIECES_[GameBoard.pieces[randomMove.from]];
+        // console.log("POS JFLDKJFDFDJJFDJF", source, target, piece )
+        // pass that move piece function 
+    } else {
+
+        
+        console.log("POS EVAL [[[[NOT]]] ZEROOOOOOOOOOOOOOOOOO", source, target, piece )
+    }
+    // make a move
+    const newPos = movePiece(source, target, piece);
+    const newPosfen = posObjToFen(newPos);
+
+    handleCastleMove(source, target, piece, newPos);
+    makeEnpassantMoveIfPossible(source, target, piece, newPos)
+    console.log("jjjjjjjjjjjjjjjjjjust checking.... ", newPos, newPosfen)
+    updateGameBoard(source, target, piece, newPosfen );
+    // isEnpassantMove(source, target, piece);
+    handleKingCheck();
+    checkGameOver()
+    PrintBoard();
+    highlightMove(source, target);
+    updateGameStatusUI(source, target);
+
+}
+
+const getMinEvalFen = (fenList) => {
+    const evalList = []
+
+    // Function to evaluate a single FEN string
+    const evaluateFEN = (fen) => {
+        let evaluation = 0;
+
+        // Split the FEN string by '/' to get each rank
+        const ranks = fen.split('/');
+
+        ranks.forEach(rank => {
+            for (let char of rank) {
+                // Check if char is a digit (representing empty squares)
+                if (char >= '1' && char <= '8') {
+                    continue;
+                } else {
+                    // Find the index of the piece character in PceChar
+                    const pieceIndex = PceChar.indexOf(char);
+                    if (pieceIndex !== -1) {
+                        evaluation += PieceVal[pieceIndex];
+                    }
+                }
+            }
+        });
+
+        return evaluation;
+    };
+
+    let minEval = Infinity;
+    let minEvalFen = null;
+
+    // Loop through the FEN list and find the one with the minimum evaluation
+    fenList.forEach(fen => {
+        const fenBoard = fen.split(' ')[0];  // Get the board configuration part of the FEN
+        const eval = evaluateFEN(fenBoard);
+        evalList.push({eval, fen})
+        if (eval < minEval) {
+            minEval = eval;
+            minEvalFen = fen;
+        }
+    });
+
+    console.log("Eval Listttttttttttttttt", evalList)
+
+    return minEvalFen;
+};
+
+
 //* ---------------- Random Move Generation for black ------------------
 // get all possible/legal moves when black's turn 
 const getAllLegalMoves = () => {
@@ -322,6 +467,7 @@ const getAllLegalMoves = () => {
             });
         }
     }
+    console.log("MOVES>>>>", moves)
     GameBoard.moves = moves;
     return moves;
 };
@@ -338,7 +484,7 @@ const makeRandomMove = () => {
     const piece = GameBoard.pieces[randomMove.from];
 
     // Move the piece on the board
-    const newPos = movePiece(source, target, piece);
+    const newPos = moveRandomPiece(source, target, piece);
 
     // Update the GameBoard state
     // GameBoard.side = GameBoard.side === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
@@ -357,14 +503,24 @@ const makeRandomMove = () => {
     updateGameStatusUI(source, target);
 };
 
+
 // Function to move the piece and return the new position object
 const movePiece = (source, target, piece) => {
-    const newPos = Chessboard.fenToObj(GameBoard.fen);
+    const currentPos = Chessboard.fenToObj(GameBoard.fen);
+    const newPos = JSON.parse(JSON.stringify(currentPos));
+    // newPos[target] = PIECES_[piece]; 
+    newPos[target] = piece;
+    delete newPos[source];
+    return newPos;
+};
+const moveRandomPiece = (source, target, piece) => {
+    const currentPos = Chessboard.fenToObj(GameBoard.fen);
+    const newPos = JSON.parse(JSON.stringify(currentPos));
+    // newPos[target] = PIECES_[piece]; 
     newPos[target] = PIECES_[piece];
     delete newPos[source];
     return newPos;
 };
-
 
 const gameLoop = () => {
     if (GameBoard.side === COLORS.BLACK) {
