@@ -1,8 +1,8 @@
-let especialMove;
+// let especialMove;
 
 function minimax(position, depth, maximizingPlayer) {
     if (depth === 0 ) {
-        console.log("Depth 0000000000000000:::::", { score: evaluatePosition(position), move: null })
+        // console.log("Depth 0000000000000000:::::", { score: evaluatePosition(position), move: null })
         return { score: evaluatePosition(position), move: null };
     }
 
@@ -38,48 +38,98 @@ function minimax(position, depth, maximizingPlayer) {
     }
 }
 
+// minimax with alpha-beta pruning
+function minimax_ab(position, depth, maximizingPlayer, alpha = -Infinity, beta = Infinity) {
+    if (depth === 0) {
+        return { score: evaluatePosition(position), move: null };
+    }
+
+    let bestMove = null;
+    console.log("minimax_______________________________", { position, depth, maximizingPlayer });
+
+    if (maximizingPlayer) {
+        let maxEval = -Infinity;
+        let children = getChildren(position, maximizingPlayer);
+
+        for (let child of children) {
+            let eval = minimax_ab(child.position, depth - 1, false, alpha, beta).score;
+            if (eval > maxEval) {
+                maxEval = eval;
+                bestMove = child.move;
+            }
+            alpha = Math.max(alpha, eval);
+            if (beta <= alpha) {
+                break; // Beta cut-off
+            }
+        }
+        console.log("maxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", { score: maxEval, move: bestMove, maximizingPlayer });
+        return { score: maxEval, move: bestMove };
+    } else {
+        let minEval = Infinity;
+        let children = getChildren(position, maximizingPlayer);
+
+        for (let child of children) {
+            let eval = minimax_ab(child.position, depth - 1, true, alpha, beta).score;
+            if (eval < minEval) {
+                minEval = eval;
+                bestMove = child.move;
+            }
+            beta = Math.min(beta, eval);
+            if (beta <= alpha) {
+                break; // Alpha cut-off
+            }
+        }
+        console.log("minnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn", { score: minEval, move: bestMove, maximizingPlayer });
+        return { score: minEval, move: bestMove };
+    }
+}
 
 //* -----------------
 function isGameOver(posFen, maximizingPlayer) {
     
-
     // parse Fen
     const boardArray = parseFenToArray(posFen.split(' ')[0])
 
     // returns -1 or +infinity/-infinity or sqIndex of king in check or
     const inCheck = isKingInCheckCopy(boardArray); 
-
+    
     if (inCheck === Number.NEGATIVE_INFINITY || inCheck === Number.POSITIVE_INFINITY) {
         // GameBoard.moves = []
         const currentPos = GameBoard.fen;
-        console.log("KING IS IN CHECK MF;]]]]]]]]]]]]]]]]]", inCheck)
         const legalMovesObj = getChildren(currentPos, maximizingPlayer);
+        console.log("KING IS IN CHECK MF;]]]]]]]]]]]]]]]]]", posFen, inCheck, legalMovesObj)
     
-        for (const moveObj of legalMovesObj) {
-            const boardArray = parseFenToArray(moveObj.position.split(' ')[0]);
-            const isKingStillInCheck = isKingInCheckCopy(boardArray);
+        // for (const moveObj of legalMovesObj) {
+        //     const boardArray = parseFenToArray(moveObj.position.split(' ')[0]);
+        //     const isKingStillInCheck = isKingInCheckCopy(boardArray);
     
-            if (isKingStillInCheck === -1) {
-                console.log("This will save your king, my boy@@@@@",moveObj.move )
-                false; // there's atleast one legal move
-            }
-        }
+        //     if (isKingStillInCheck === -1) {
+        //         console.log("This will save your king, my boy@@@@@",moveObj.move )
+        //         false; // there's atleast one legal move
+        //     }
+        // }
 
         return true; // Game over due to missing king
     }
 
     if(inCheck !== -1) {
+        const square = SQ120TOFILERANK(inCheck)
+        // $board.find('.square-' + square).addClass('highlight-attack');
+        if(square) GameBoard.isKingInCheck = true;
+    
         // GameBoard.moves = []
-        console.log("KING IS IN CHECK MF;]]]]]]]]]]]]]]]]]", inCheck)
+        console.log("KING IS IN CHECK MF;]]]]]]]]]]]]]]]]]", inCheck, square)
         const legalMovesObj = getChildren(posFen, maximizingPlayer);
 
+        console.log("KING IS IN CHECK MF;]]]]]]]]]]]]]]]]]", posFen, inCheck, legalMovesObj)
         for (const moveObj of legalMovesObj) {
             const boardArray = parseFenToArray(moveObj.position.split(' ')[0]);
             const isKingStillInCheck = isKingInCheckCopy(boardArray);
 
             if (isKingStillInCheck === -1) {
-                false; // there's atleast one legal move
-            }
+                console.log("this will save your king....", moveObj.move)
+                return false; // there's atleast one legal move
+            } 
         }
         return true; // checkmate
     }

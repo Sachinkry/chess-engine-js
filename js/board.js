@@ -17,10 +17,10 @@ var GameBoard = {
     moveList: new Array(MAXDEPTH * MAXPOSITIONMOVES),
     moveScores: new Array(MAXDEPTH * MAXPOSITIONMOVES),
     moveListStart: new Array(MAXDEPTH),
-    isKingInCheck: false,
     isGameOver: false,
-    kingInCheckCount: 0,
+    isKingInCheck: false,
 };
+// kingInCheckCount: 0,
 // moveList: Array storing all moves in the current search.
 // moveScores: Array storing the scores for each move.
 // moveListStart: Array storing the index of the start of each depth in moveList.
@@ -40,7 +40,7 @@ const initBoardSquares = () => {
     }
 };
 
-const PrintBoard = () => {
+const PrintBoardInConsole = () => {
     console.log("\nGame Board:\n");
     for (let rank = RANKS.RANK_8; rank >= RANKS.RANK_1; rank--) {
         let line = RankChar[rank] + " ";
@@ -101,24 +101,27 @@ const ResetBoard = () => {
     GameBoard.moveListStart[GameBoard.ply] = 0;
 }
 
-
-const updateGameBoard = async (source, target, piece, newPosFen) => {
+function updateGameBoard(source, target, piece, newPos, newPosFen) {
 
     console.log("updateGameBoard:", GameBoard.fen);
     
+    
     const turn = SideChar[GameBoard.side];
     const fen = `${newPosFen} ${turn} KQkq - 0 1`
+    // const fen = GameBoard.fen;
     const fenParts = fen.split(' ');
-    const position = fenParts[0];
+    let position = fenParts[0];
     const fenSide = fenParts[1];
-    // const castling = fenParts[2];
+    let castling = fenParts[2];
     let enPassant = fenParts[3];
     const halfMove = parseInt(fenParts[4], 10);
     const fullMove = parseInt(fenParts[5], 10);
     
-    // Update en passant square
+    newPos = makeEnpassantMove(source, target, piece, newPos)
+    position = posObjToFen(newPos)
+    // check if enPass possible & update GameBoard.enPas
     isEnpassantMove(source, target, piece);
-    if(GameBoard.enPas === 99){
+    if(GameBoard.enPas === 99 || GameBoard.enPas === 0){
         enPassant = '-'
     } else {
         enPassant = GameBoard.enPas;
@@ -130,6 +133,7 @@ const updateGameBoard = async (source, target, piece, newPosFen) => {
         return;
     }
 
+    //? Update GameBoard.pieces
     let rank = RANKS.RANK_8;
     for (let i = 0; i < positionRanks.length; i++) {
         const fenRank = positionRanks[i];
@@ -175,16 +179,8 @@ const updateGameBoard = async (source, target, piece, newPosFen) => {
     // update turn
     GameBoard.side = (fenSide === 'w' ? COLORS.BLACK: COLORS.WHITE);
     
-
-    // Update castling permissions
-    UpdateCastlePerm();
-    // update castling in fen string
-    let updatedCastling = '';
-    if (GameBoard.castlePerm & CASTLEBIT.WKCA) updatedCastling += 'K';
-    if (GameBoard.castlePerm & CASTLEBIT.WQCA) updatedCastling += 'Q';
-    if (GameBoard.castlePerm & CASTLEBIT.BKCA) updatedCastling += 'k';
-    if (GameBoard.castlePerm & CASTLEBIT.BQCA) updatedCastling += 'q';
-    if (updatedCastling === '') updatedCastling = '-';
+    // update castle Permissions & UI if castle move happens
+    castling = updateBoardAfterCastleing(source, target, piece, newPos);
 
     // Update half-move counter
     GameBoard.fiftyMove = halfMove;
@@ -194,8 +190,84 @@ const updateGameBoard = async (source, target, piece, newPosFen) => {
 
     // Update the FEN string in GameBoard
     const sideChar = GameBoard.side === COLORS.WHITE ? 'w' : 'b';
-    GameBoard.fen = `${position} ${sideChar} ${updatedCastling} ${enPassant} ${halfMove} ${fullMove}`;
+    GameBoard.fen = `${position} ${sideChar} ${castling} ${enPassant} ${halfMove} ${fullMove}`;
 
+    let isGameover = isGameOver(GameBoard.fen, (sideChar === 'w' ? true: false))
+    GameBoard.isGameOver = isGameover;
+    PrintBoardInConsole();
     console.log("Updated GameBoard:", GameBoard);
 }
 
+//* Helper functions
+// update Ui and castle permissions
+const updateBoardAfterCastleing = (source, target, piece, newPos) => {
+    console.log("This function has been called...");
+  
+    const isKingSideCastle = (source, target, rank) => source === `e${rank}` && target === `g${rank}`;
+    const isQueenSideCastle = (source, target, rank) => source === `e${rank}` && target === `c${rank}`;
+  
+    const updatePosition = (oldPos, newPos, piece) => {
+      GameBoard.pieces[oldPos] = PIECES.EMPTY;
+      GameBoard.pieces[newPos] = piece;
+      delete newPos[oldPos];
+      newPos[newPos] = PIECES_[piece];
+    };
+  
+    const handleCastle = (rank, rookOldPos, rookNewPos, rookPiece) => {
+      updatePosition(rookOldPos, rookNewPos, rookPiece);
+      board.move(`${rookOldPos}-${rookNewPos}`);
+      newPos[rookNewPos] = PIECES_[rookPiece];
+    };
+  
+    if (piece === 'wK') {
+      if (isKingSideCastle(source, target, 1)) {
+        handleCastle(1, 'h1', 'f1', PIECES.wR);
+      } else if (isQueenSideCastle(source, target, 1)) {
+        handleCastle(1, 'a1', 'd1', PIECES.wR);
+      }
+    } else if (piece === 'bK') {
+      if (isKingSideCastle(source, target, 8)) {
+        handleCastle(8, 'h8', 'f8', PIECES.bR);
+      } else if (isQueenSideCastle(source, target, 8)) {
+        handleCastle(8, 'a8', 'd8', PIECES.bR);
+      }
+    }
+
+    // update/revoke castle Permissions in GameBoard.castlePerm
+    UpdateCastlePerm();
+
+    // update castle Perm string
+    let castlingStr = '';
+    if (GameBoard.castlePerm & CASTLEBIT.WKCA) castlingStr += 'K';
+    if (GameBoard.castlePerm & CASTLEBIT.WQCA) castlingStr += 'Q';
+    if (GameBoard.castlePerm & CASTLEBIT.BKCA) castlingStr += 'k';
+    if (GameBoard.castlePerm & CASTLEBIT.BQCA) castlingStr += 'q';
+    if (castlingStr === '') castlingStr = '-';
+    return castlingStr;
+}
+
+const UpdateCastlePerm = () => {
+    const { pieces } = GameBoard;
+
+    if (pieces[SQUARES.E1] !== PIECES.wK) {
+        GameBoard.castlePerm &= ~CASTLEBIT.WKCA;
+        GameBoard.castlePerm &= ~CASTLEBIT.WQCA;
+    }
+    if (pieces[SQUARES.H1] !== PIECES.wR) {
+        GameBoard.castlePerm &= ~CASTLEBIT.WKCA;
+    }
+    if (pieces[SQUARES.A1] !== PIECES.wR) {
+        GameBoard.castlePerm &= ~CASTLEBIT.WQCA;
+    }
+    if (pieces[SQUARES.E8] !== PIECES.bK) {
+        GameBoard.castlePerm &= ~CASTLEBIT.BKCA;
+        GameBoard.castlePerm &= ~CASTLEBIT.BQCA;
+    }
+    if (pieces[SQUARES.H8] !== PIECES.bR) {
+        GameBoard.castlePerm &= ~CASTLEBIT.BKCA;
+    }
+    if (pieces[SQUARES.A8] !== PIECES.bR) {
+        GameBoard.castlePerm &= ~CASTLEBIT.BQCA;
+    }
+    console.log("Updated Castle Permissions:", GameBoard.castlePerm);
+};

@@ -149,20 +149,19 @@ const updateGameStatusUI = (source, target) => {
     // document.getElementById('enPassantSquare').innerText = GameBoard.enPas !== 0 ? SQ120TOFILERANK(GameBoard.enPas) : 'None';
     // document.getElementById('castlingPermission').innerText = castlingPermissionToString(GameBoard.castlePerm);
 
-    // if (GameBoard.isGameOver) {
-    //     const turn = SideChar[GameBoard.side];
-    //     const winner = (turn === 'w') ? 'Black' : 'White';
+    if (GameBoard.isGameOver) {
+        const turn = SideChar[GameBoard.side];
+        const winner = (turn === 'w') ? 'Black' : 'White';
     
-    //     document.getElementById('winningStatus').innerText = `Game Over: ${winner} won`;
+        document.getElementById('winningStatus').innerText = `Game Over: ${winner} won`;
         
-    //     // Disable board
-    //     $('#myBoard').css('pointer-events', 'none');
+        // Disable board
+        $('#myBoard').css('pointer-events', 'none');
     
-    // // $board.find('.square-' + square).css('pointer-events', none)
-    // }
-    console.log("board chess", board, source, target, `${source}-${target}`)
+    // $board.find('.square-' + square).css('pointer-events', none)
+    }
     board.move(`${source}-${target}`);
-  
+
 };
 
 // * quite a good function
@@ -560,4 +559,94 @@ function isThisACastleMove(source, target, piece) {
   
     return false;
 }
-  
+
+//* moveGenerator helper functions
+const isOnBoard = (squareIndex) => squareIndex !== SQUARES.OFFBOARD;
+
+const isEmptySquare = (squareIndex) => GameBoard.pieces[squareIndex] === PIECES.EMPTY;
+
+const isOpponentPiece = (targetSquareIndex) => {
+    const turn = SideChar[GameBoard.side];
+    if (turn === 'w') {
+        return GameBoard.pieces[targetSquareIndex] >= PIECES.bP;
+    } else {
+        return GameBoard.pieces[targetSquareIndex] <= PIECES.wK;
+    }
+}
+
+const isCaptureMove= (targetSquareIndex) =>  {
+    return isOpponentPiece(targetSquareIndex) || targetSquareIndex === GameBoard.enPas;
+}
+
+const IsSqAttacked= (sqIndex) => {
+    const attackingColor = GameBoard.side === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
+
+    // Ensure the square is on the board
+    if (sqIndex < 0 || sqIndex >= BRD_SQ_NUM || GameBoard.pieces[sqIndex] === SQUARES.OFFBOARD) {
+        console.error("Invalid square for attack check:", sqIndex);
+        return false;
+    }
+
+    // Check for pawn attacks
+    if (attackingColor === COLORS.WHITE) {
+        if (GameBoard.pieces[sqIndex - 11] === PIECES.wP || GameBoard.pieces[sqIndex - 9] === PIECES.wP) {
+            return true;
+        }
+    } else {
+        if (GameBoard.pieces[sqIndex + 11] === PIECES.bP || GameBoard.pieces[sqIndex + 9] === PIECES.bP) {
+            return true;
+        }
+    }
+
+    // Check for knight attacks
+    const knightDirections = [-8, -19, -21, -12, 8, 19, 21, 12];
+    for (let dir of knightDirections) {
+        if (GameBoard.pieces[sqIndex + dir] === (attackingColor === COLORS.WHITE ? PIECES.wN : PIECES.bN)) {
+            return true;
+        }
+    }
+
+    // Check for bishop/queen diagonal attacks
+    const bishopDirections = [-9, -11, 11, 9];
+    for (let dir of bishopDirections) {
+        let t_square = sqIndex + dir;
+        while (GameBoard.pieces[t_square] !== SQUARES.OFFBOARD) {
+            const piece = GameBoard.pieces[t_square];
+            if (piece !== PIECES.EMPTY) {
+                if ((attackingColor === COLORS.WHITE && (piece === PIECES.wB || piece === PIECES.wQ)) ||
+                    (attackingColor === COLORS.BLACK && (piece === PIECES.bB || piece === PIECES.bQ))) {
+                    return true;
+                }
+                break;
+            }
+            t_square += dir;
+        }
+    }
+
+    // Check for rook/queen straight attacks
+    const rookDirections = [-1, -10, 1, 10];
+    for (let dir of rookDirections) {
+        let t_square = sqIndex + dir;
+        while (GameBoard.pieces[t_square] !== SQUARES.OFFBOARD) {
+            const piece = GameBoard.pieces[t_square];
+            if (piece !== PIECES.EMPTY) {
+                if ((attackingColor === COLORS.WHITE && (piece === PIECES.wR || piece === PIECES.wQ)) ||
+                    (attackingColor === COLORS.BLACK && (piece === PIECES.bR || piece === PIECES.bQ))) {
+                    return true;
+                }
+                break;
+            }
+            t_square += dir;
+        }
+    }
+
+    // Check for king attacks
+    const kingDirections = [-1, -10, 1, 10, -9, -11, 11, 9];
+    for (let dir of kingDirections) {
+        if (GameBoard.pieces[sqIndex + dir] === (attackingColor === COLORS.WHITE ? PIECES.wK : PIECES.bK)) {
+            return true;
+        }
+    }
+
+    return false;
+}

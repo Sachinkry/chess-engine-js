@@ -1,87 +1,76 @@
-// Piece movement vectors
-const pieceDirections = {
-    'p': [-10, -20, -11, -9], // White pawns
-    'P': [10, 20, 11, 9],     // Black pawns
-    'N': [-21, -19, -12, -8, 8, 12, 19, 21],
-    'B': [-11, -9, 9, 11],
-    'R': [-10, -1, 1, 10],
-    'Q': [-11, -10, -9, -1, 1, 9, 10, 11],
-    'K': [-11, -10, -9, -1, 1, 9, 10, 11]
-};
 
+// get legal moves, check castling and highlight those moves
 function getLegalMoves(source, piece) {
     GameBoard.moves = [];
-    let p = piece == 'bP' ? piece[1].toLowerCase() : piece[1];
-    let directions = pieceDirections[p];
-    let f = FileChar.indexOf(source[0]);
-    let r = RankChar.indexOf(source[1]);
-    let square = FR2SQ(f,r)
-    // console.log(source, piece, square, directions, GameBoard.pieces[square])  // g2 wP {a1:'wR', ... h8:'bR'}
+    const pieceType = (piece === 'bP') ? piece[1].toLowerCase(): piece[1];
+    const directions = pieceDirections[pieceType];
+    const f = FileChar.indexOf(source[0]);
+    const r = RankChar.indexOf(source[1]);
+    const square = FR2SQ(f, r);
 
-
-    directions.forEach(direction => {
-        let targetSquare = square + direction;
-        // console.log(p, GameBoard.pieces[targetSquare], targetSquare)
-        
-        if (p === 'P' || p === 'p') {
-            // Single square forward move
-            if (direction === (p === 'P' ? 10 : -10) && GameBoard.pieces[targetSquare] === PIECES.EMPTY) {
+    const addMoveIfValid = (targetSquare) => {
+        if (GameBoard.pieces[targetSquare] === SQUARES.OFFBOARD) return false;
+        if (GameBoard.pieces[targetSquare] === PIECES.EMPTY) {
+            if (piece[1] !== 'K' || !IsSqAttacked(targetSquare)) {
                 GameBoard.moves.push(targetSquare);
-                
-                // Double square forward move from starting position
-                if ((p === 'P' && r === 1) || (p === 'p' && r === 6)) {
-                    let doubleMoveSquare = targetSquare + direction;
-                    if (GameBoard.pieces[doubleMoveSquare] === PIECES.EMPTY) {
-                        GameBoard.moves.push(doubleMoveSquare);
-                    }
+            }
+            return true;
+        }
+        const isWhitePiece = piece[0] === 'w';
+        const isEnemyPiece = isWhitePiece ? GameBoard.pieces[targetSquare] >= PIECES.bP : GameBoard.pieces[targetSquare] <= PIECES.wK;
+        if (isEnemyPiece) GameBoard.moves.push(targetSquare);
+        return false;
+    };
+
+    const handlePawnMoves = () => {
+        directions.forEach(direction => {
+            const targetSquare = square + direction;
+            const forwardDirection = pieceType === 'p' ? -10 : 10;
+            const startRank = pieceType === 'p' ? 6 : 1;
+            const doubleMoveSquare = targetSquare + direction;
+
+            if (direction === forwardDirection && GameBoard.pieces[targetSquare] === PIECES.EMPTY) {
+                GameBoard.moves.push(targetSquare);
+                if (r === startRank && GameBoard.pieces[doubleMoveSquare] === PIECES.EMPTY) {
+                    GameBoard.moves.push(doubleMoveSquare);
                 }
-            } 
-            // Handle captures
-            else if (Math.abs(direction) === 9 || Math.abs(direction) === 11) {
-                // console.log("isNotEmpty", GameBoard.pieces[targetSquare] !== PIECES.EMPTY)
-                // console.log("NotOffboard", GameBoard.pieces[targetSquare] !== SQUARES.OFFBOARD)
-                // console.log("hi", ((p === 'P' && GameBoard.pieces[targetSquare] >= PIECES.bP) ||
-                // (p === 'p' && GameBoard.pieces[targetSquare] <= PIECES.wK)));
-                if (GameBoard.pieces[targetSquare] !== PIECES.EMPTY &&
-                    GameBoard.pieces[targetSquare] !== SQUARES.OFFBOARD &&
-                    ((p === 'P' && GameBoard.pieces[targetSquare] >= PIECES.bP) ||
-                    (p === 'p' && GameBoard.pieces[targetSquare] <= PIECES.wK))) {
-                    GameBoard.moves.push(targetSquare);
+            } else if (Math.abs(direction) === 9 || Math.abs(direction) === 11) {
+                if (GameBoard.pieces[targetSquare] !== PIECES.EMPTY && GameBoard.pieces[targetSquare] !== SQUARES.OFFBOARD) {
+                    addMoveIfValid(targetSquare);
                 } else if (targetSquare === GameBoard.enPas) {
-                    GameBoard.moves.push(targetSquare)
+                    GameBoard.moves.push(targetSquare);
                 }
             }
-        } else {
-            // For non-pawn pieces
-            while (GameBoard.pieces[targetSquare] !== SQUARES.OFFBOARD) {
-                if (GameBoard.pieces[targetSquare] === PIECES.EMPTY) {
-                    if(piece[1] === 'K' && IsSqAttacked(targetSquare)){
-                        // GameBoard.moves.push(targetSquare);
-                        console.log("targetSquare for king in attack oh my lord help me........")
-                    } else {
-                        GameBoard.moves.push(targetSquare);
-                    }
-                } else if (GameBoard.pieces[targetSquare] !== PIECES.EMPTY) {
-                    if((piece[0] === 'w' && GameBoard.pieces[targetSquare] >= PIECES.bP) ||
-                    (piece[0] === 'b' && GameBoard.pieces[targetSquare] <= PIECES.wK)) {
-                        GameBoard.moves.push(targetSquare);
-                    }
-                    break;
-                } else {
-                    break;
-                }
+        });
+    };
 
-                // Continue in the same direction for sliding pieces
-                if (['N', 'K'].includes(p)) {
-                    break;
-                }
+    const handleNonPawnMoves = () => {
+        // check castling permissions for king pieces
+        if (piece[1] === 'K' && (source === 'e1' || source === 'e8')) {
+            checkCastling();
+        }
+        directions.forEach(direction => {
+            let targetSquare = square + direction;
+            while (GameBoard.pieces[targetSquare] !== SQUARES.OFFBOARD) {
+                if (!addMoveIfValid(targetSquare)) break;
+                if (['N', 'K'].includes(piece[1])) break;
                 targetSquare += direction;
             }
-        }
-        
-    })
-    return GameBoard.moves;
+        });
+    };
 
+    if (pieceType === 'p' || pieceType === 'P') {
+        handlePawnMoves();
+    } else {
+        handleNonPawnMoves();
+    }
+
+    // highlight legal moves
+    if(GameBoard.moves.length > 0){
+        highlightLegalMoves(piece);
+    }
+
+    return GameBoard.moves;
 }
 
 function getAllLegalMovesObjs(posFen, isMaximizingPlayer) {
@@ -258,7 +247,6 @@ function isSquareAttacked(sqIndex, draggedPiece){
     return false;
 }
 
-
 function isKingInCheck() {
     const sides = [COLORS.WHITE, COLORS.BLACK];
     const pieceKing = [PIECES.wK, PIECES.bK];
@@ -357,14 +345,15 @@ function isKingInCheck() {
 const makeEvaluatedMove = () => {
     console.log("********************************** Black's turn *************************************")
     let source, target, piece;
-    let result = minimax(GameBoard.fen, 3, false);
+    // let result = minimax(GameBoard.fen, 2, false);
+    let result = minimax_ab(GameBoard.fen, 4, false);
     console.log("Best move:", result.move, "Score:", result.score);
     // when eval is 0, the moves are dull, add some randomness(later: we may give opening book to bot)
 
     source = result.move.source;
     target = result.move.target;
     piece = result.move.piece;
-    if(result.move === null){
+    if(result.move !== null){
 
     }
     
@@ -389,19 +378,24 @@ const makeEvaluatedMove = () => {
         console.log("POS EVAL [[[[NOT]]] ZEROOOOOOOOOOOOOOOOOO", source, target, piece )
     }
     // make a move
-    const newPos = movePiece(source, target, piece);
-    const newPosfen = posObjToFen(newPos);
+    let newPos;
+    let newPosfen;
+    if(!GameBoard.isGameOver){
 
-    handleCastleMove(source, target, piece, newPos);
-    makeEnpassantMoveIfPossible(source, target, piece, newPos)
+        newPos = movePiece(source, target, piece);
+    }
+    newPosfen = posObjToFen(newPos);
+
+    // handleCastleMove(source, target, piece, newPos);
+    // makeEnpassantMoveIfPossible(source, target, piece, newPos)
     console.log("jjjjjjjjjjjjjjjjjjust checking.... ", newPos, newPosfen)
-    updateGameBoard(source, target, piece, newPosfen );
+    updateGameBoard(source, target, piece, newPos, newPosfen);
     // isEnpassantMove(source, target, piece);
-    handleKingCheck();
-    checkGameOver()
-    PrintBoard();
-    highlightMove(source, target);
+    // handleKingCheck();
+    // checkGameOver()
+    // PrintBoard();
     updateGameStatusUI(source, target);
+    highlightMove(source, target);
 
 }
 
@@ -533,175 +527,104 @@ const gameLoop = () => {
 };
 
 
-//* ------------------ CASTLING LOGIC ------------------------------------
-const CheckCastling = () => {
+//* ------------------ CASTLING MOVE --------------------
+
+const checkCastling = () => {
     const { side, castlePerm } = GameBoard;
+    
+    const canCastle = (kingPos, rookPos, emptySquares, targetSquares) => {
+        if (GameBoard.pieces[kingPos] === PIECES[`${SideChar[side]}K`] &&
+            GameBoard.pieces[rookPos] === PIECES[`${SideChar[side]}R`] &&
+            emptySquares.every(sq => GameBoard.pieces[sq] === PIECES.EMPTY) &&
+            targetSquares.every(sq => !IsSqAttacked(sq))) {
+            return true;
+        }
+        return false;
+    };
+
+    const addCastleMove = (kingPos, rookPos, emptySquares, targetSquares, target) => {
+        if (canCastle(kingPos, rookPos, emptySquares, targetSquares)) {
+            GameBoard.castleMove.push({ from: kingPos, to: target });
+            GameBoard.moves.push(target);
+        }
+    };
 
     if (side === COLORS.WHITE) {
         if (castlePerm & CASTLEBIT.WKCA) {
-            if (GameBoard.pieces[SQUARES.E1] === PIECES.wK &&
-                GameBoard.pieces[SQUARES.H1] === PIECES.wR &&
-                GameBoard.pieces[SQUARES.F1] === PIECES.EMPTY &&
-                GameBoard.pieces[SQUARES.G1] === PIECES.EMPTY &&
-                !IsSqAttacked(SQUARES.E1) &&
-                !IsSqAttacked(SQUARES.F1) &&
-                !IsSqAttacked(SQUARES.G1)) {
-                
-                // White king-side castling
-                GameBoard.castleMove.push({ from: SQUARES.E1, to: SQUARES.G1}); 
-                // add the target sq to gameboard.moves
-                GameBoard.moves.push(SQUARES.G1)
-            }
+            addCastleMove(SQUARES.E1, SQUARES.H1, [SQUARES.F1, SQUARES.G1], [SQUARES.E1, SQUARES.F1, SQUARES.G1], SQUARES.G1);
         }
         if (castlePerm & CASTLEBIT.WQCA) {
-            if (GameBoard.pieces[SQUARES.E1] === PIECES.wK &&
-                GameBoard.pieces[SQUARES.A1] === PIECES.wR &&
-                GameBoard.pieces[SQUARES.D1] === PIECES.EMPTY &&
-                GameBoard.pieces[SQUARES.C1] === PIECES.EMPTY &&
-                GameBoard.pieces[SQUARES.B1] === PIECES.EMPTY &&
-                !IsSqAttacked(SQUARES.E1) &&
-                !IsSqAttacked(SQUARES.D1) &&
-                !IsSqAttacked(SQUARES.C1)) {
-                
-                // White queen-side castling
-                GameBoard.castleMove.push({ from: SQUARES.E1, to: SQUARES.C1});
-                GameBoard.moves.push(SQUARES.C1)
-            }
+            addCastleMove(SQUARES.E1, SQUARES.A1, [SQUARES.D1, SQUARES.C1, SQUARES.B1], [SQUARES.E1, SQUARES.D1, SQUARES.C1], SQUARES.C1);
         }
     } else {
         if (castlePerm & CASTLEBIT.BKCA) {
-            if (GameBoard.pieces[SQUARES.E8] === PIECES.bK &&
-                GameBoard.pieces[SQUARES.H8] === PIECES.bR &&
-                GameBoard.pieces[SQUARES.F8] === PIECES.EMPTY &&
-                GameBoard.pieces[SQUARES.G8] === PIECES.EMPTY &&
-                !IsSqAttacked(SQUARES.E8) &&
-                !IsSqAttacked(SQUARES.F8) &&
-                !IsSqAttacked(SQUARES.G8)) {
-                    
-                    // Black king-side castling
-                    GameBoard.castleMove.push({ from: SQUARES.E8, to: SQUARES.G8});
-                    GameBoard.moves.push(SQUARES.G8)
-            }
+            addCastleMove(SQUARES.E8, SQUARES.H8, [SQUARES.F8, SQUARES.G8], [SQUARES.E8, SQUARES.F8, SQUARES.G8], SQUARES.G8);
         }
         if (castlePerm & CASTLEBIT.BQCA) {
-            if (GameBoard.pieces[SQUARES.E8] === PIECES.bK &&
-                GameBoard.pieces[SQUARES.A8] === PIECES.bR &&
-                GameBoard.pieces[SQUARES.D8] === PIECES.EMPTY &&
-                GameBoard.pieces[SQUARES.C8] === PIECES.EMPTY &&
-                GameBoard.pieces[SQUARES.B8] === PIECES.EMPTY &&
-                !IsSqAttacked(SQUARES.E8) &&
-                !IsSqAttacked(SQUARES.D8) &&
-                !IsSqAttacked(SQUARES.C8)) {
-                
-                // Black queen-side castling
-                GameBoard.castleMove.push({ from: SQUARES.E8, to: SQUARES.C8});
-                GameBoard.moves.push(SQUARES.C8)
-            }
+            addCastleMove(SQUARES.E8, SQUARES.A8, [SQUARES.D8, SQUARES.C8, SQUARES.B8], [SQUARES.E8, SQUARES.D8, SQUARES.C8], SQUARES.C8);
         }
     }
 
-    console.log("CastleMoves..........", GameBoard.castleMove, GameBoard.moves)
+    console.log("CastleMoves..........", GameBoard.castleMove, GameBoard.moves);
 };
 
-//* This function runs at every turn and revokes castling rights if king or rook position changes
-const UpdateCastlePerm = () => {
-    const { pieces } = GameBoard;
-
-    if (pieces[SQUARES.E1] !== PIECES.wK) {
-        GameBoard.castlePerm &= ~CASTLEBIT.WKCA;
-        GameBoard.castlePerm &= ~CASTLEBIT.WQCA;
-    }
-    if (pieces[SQUARES.H1] !== PIECES.wR) {
-        GameBoard.castlePerm &= ~CASTLEBIT.WKCA;
-    }
-    if (pieces[SQUARES.A1] !== PIECES.wR) {
-        GameBoard.castlePerm &= ~CASTLEBIT.WQCA;
-    }
-    if (pieces[SQUARES.E8] !== PIECES.bK) {
-        GameBoard.castlePerm &= ~CASTLEBIT.BKCA;
-        GameBoard.castlePerm &= ~CASTLEBIT.BQCA;
-    }
-    if (pieces[SQUARES.H8] !== PIECES.bR) {
-        GameBoard.castlePerm &= ~CASTLEBIT.BKCA;
-    }
-    if (pieces[SQUARES.A8] !== PIECES.bR) {
-        GameBoard.castlePerm &= ~CASTLEBIT.BQCA;
-    }
-
-    console.log("Updated Castle Permissions:", GameBoard.castlePerm);
-};
-
-
-//! use this function for castling checks only
-const IsSqAttacked= (sqIndex) => {
-    const attackingColor = GameBoard.side === COLORS.WHITE ? COLORS.BLACK : COLORS.WHITE;
-
-    // Ensure the square is on the board
-    if (sqIndex < 0 || sqIndex >= BRD_SQ_NUM || GameBoard.pieces[sqIndex] === SQUARES.OFFBOARD) {
-        console.error("Invalid square for attack check:", sqIndex);
-        return false;
-    }
-
-    // Check for pawn attacks
-    if (attackingColor === COLORS.WHITE) {
-        if (GameBoard.pieces[sqIndex - 11] === PIECES.wP || GameBoard.pieces[sqIndex - 9] === PIECES.wP) {
-            return true;
-        }
+//* ------------------ ENPASSANT MOVE --------------------
+// if pawn is double-square move, update GameBoard.enPas
+const isEnpassantMove = (source, target, piece) => {
+    console.log("Is EnPassant Move...",{source, target, piece} );
+  
+    // Convert source and target to ranks and files
+    const sourceFile = source.charCodeAt(0) - 'a'.charCodeAt(0);
+    const sourceRank = parseInt(source[1], 10) - 1;
+    const targetFile = target.charCodeAt(0) - 'a'.charCodeAt(0);
+    const targetRank = parseInt(target[1], 10) - 1;
+    const pieceColor = piece[0];
+  
+    // Check if the move is a two-square pawn move
+    const isTwoSquareMove = () => (
+        (pieceColor === 'w' && sourceRank === 1 && targetRank === 3) ||
+        (pieceColor === 'b' && sourceRank === 6 && targetRank === 4)
+    );
+  
+    // Check if adjacent square (left and right square of target) is an opposite pawn
+    const isAdjacentAnOppositePawn = () => {
+        const oppositePawn = (pieceColor === 'w') ? PIECES.bP : PIECES.wP;
+        const checkSquare = (file) => (
+            file >= FILES.FILE_A && file <= FILES.FILE_H && 
+            GameBoard.pieces[FR2SQ(file, targetRank)] === oppositePawn
+        );
+        return checkSquare(targetFile - 1) || checkSquare(targetFile + 1);
+    };
+  
+    if (piece[1] === 'P' && isTwoSquareMove() && isAdjacentAnOppositePawn()) {
+        GameBoard.enPas = FR2SQ(targetFile, pieceColor === 'w' ? 2 : 5);
     } else {
-        if (GameBoard.pieces[sqIndex + 11] === PIECES.bP || GameBoard.pieces[sqIndex + 9] === PIECES.bP) {
-            return true;
-        }
+        GameBoard.enPas = SQUARES.NO_SQ;
     }
+  
+    console.log("En Passant square: ", GameBoard.enPas);
+};
+  
+// if GameBoard.enPas !== 0 or 99; make EnPassant move 
+const makeEnpassantMove = (source, target, piece, newPos) => {
 
-    // Check for knight attacks
-    const knightDirections = [-8, -19, -21, -12, 8, 19, 21, 12];
-    for (let dir of knightDirections) {
-        if (GameBoard.pieces[sqIndex + dir] === (attackingColor === COLORS.WHITE ? PIECES.wN : PIECES.bN)) {
-            return true;
-        }
+    const enPassSq = SQ120TOFILERANK(GameBoard.enPas);
+    
+    const updateBoardForEnPassant = (captureOffset) => {
+        const capturePawnSq = SQ120TOFILERANK(GameBoard.enPas + captureOffset);
+        console.log("UPDATED ENPASS PAWN CAPTURE..... ", enPassSq, target, GameBoard.enPas + captureOffset);
+        // Deep copy newPos to avoid mutating the original object
+        const newPosCopy = { ...newPos };
+        delete newPosCopy[capturePawnSq];
+        board.position(newPosCopy, false);
+        newPos = newPosCopy;
+        //update fen 
+    };
+    
+    if (piece === 'bP' && target === enPassSq) {
+        updateBoardForEnPassant(10);
+    } else if (piece === 'wP' && target === enPassSq) {
+        updateBoardForEnPassant(-10);
     }
-
-    // Check for bishop/queen diagonal attacks
-    const bishopDirections = [-9, -11, 11, 9];
-    for (let dir of bishopDirections) {
-        let t_square = sqIndex + dir;
-        while (GameBoard.pieces[t_square] !== SQUARES.OFFBOARD) {
-            const piece = GameBoard.pieces[t_square];
-            if (piece !== PIECES.EMPTY) {
-                if ((attackingColor === COLORS.WHITE && (piece === PIECES.wB || piece === PIECES.wQ)) ||
-                    (attackingColor === COLORS.BLACK && (piece === PIECES.bB || piece === PIECES.bQ))) {
-                    return true;
-                }
-                break;
-            }
-            t_square += dir;
-        }
-    }
-
-    // Check for rook/queen straight attacks
-    const rookDirections = [-1, -10, 1, 10];
-    for (let dir of rookDirections) {
-        let t_square = sqIndex + dir;
-        while (GameBoard.pieces[t_square] !== SQUARES.OFFBOARD) {
-            const piece = GameBoard.pieces[t_square];
-            if (piece !== PIECES.EMPTY) {
-                if ((attackingColor === COLORS.WHITE && (piece === PIECES.wR || piece === PIECES.wQ)) ||
-                    (attackingColor === COLORS.BLACK && (piece === PIECES.bR || piece === PIECES.bQ))) {
-                    return true;
-                }
-                break;
-            }
-            t_square += dir;
-        }
-    }
-
-    // Check for king attacks
-    const kingDirections = [-1, -10, 1, 10, -9, -11, 11, 9];
-    for (let dir of kingDirections) {
-        if (GameBoard.pieces[sqIndex + dir] === (attackingColor === COLORS.WHITE ? PIECES.wK : PIECES.bK)) {
-            return true;
-        }
-    }
-
-    return false;
-}
+    return newPos;
+};
